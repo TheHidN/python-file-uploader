@@ -64,8 +64,7 @@ def test_browse_unreadable_dir(client, tmp_path, monkeypatch):
 def _upload(client, path, files, follow=True, **flags):
     data = {"path": str(path), "files": [(io.BytesIO(body), name) for name, body in files]}
     data.update({k: "on" for k, v in flags.items() if v})
-    return client.post("/upload", data=data, content_type="multipart/form-data",
-                       follow_redirects=follow)
+    return client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=follow)
 
 
 def test_upload_saves_multiple(client, tmp_path):
@@ -142,22 +141,31 @@ def test_upload_too_large(tmp_path, monkeypatch):
 
 
 def test_upload_rejects_cross_origin(client, tmp_path):
-    r = client.post("/upload", data={"path": str(tmp_path), "files": [(io.BytesIO(b"A"), "a.txt")]},
-                    headers={"Origin": "http://evil.example"})
+    r = client.post(
+        "/upload",
+        data={"path": str(tmp_path), "files": [(io.BytesIO(b"A"), "a.txt")]},
+        headers={"Origin": "http://evil.example"},
+    )
     assert r.status_code == 403
     assert not (tmp_path / "a.txt").exists()
 
 
 def test_upload_rejects_cross_site_fetch(client, tmp_path):
-    r = client.post("/upload", data={"path": str(tmp_path), "files": [(io.BytesIO(b"A"), "a.txt")]},
-                    headers={"Sec-Fetch-Site": "cross-site"})
+    r = client.post(
+        "/upload",
+        data={"path": str(tmp_path), "files": [(io.BytesIO(b"A"), "a.txt")]},
+        headers={"Sec-Fetch-Site": "cross-site"},
+    )
     assert r.status_code == 403
     assert not (tmp_path / "a.txt").exists()
 
 
 def test_upload_allows_same_origin(client, tmp_path):
-    client.post("/upload", data={"path": str(tmp_path), "files": [(io.BytesIO(b"A"), "a.txt")]},
-                headers={"Origin": "http://localhost", "Sec-Fetch-Site": "same-origin"})
+    client.post(
+        "/upload",
+        data={"path": str(tmp_path), "files": [(io.BytesIO(b"A"), "a.txt")]},
+        headers={"Origin": "http://localhost", "Sec-Fetch-Site": "same-origin"},
+    )
     assert (tmp_path / "a.txt").exists()
 
 
@@ -189,8 +197,9 @@ def test_browse_has_drop_zone(client, tmp_path):
 
 
 def test_upload_json_returns_redirect_and_keeps_flash(app, client, tmp_path):
-    r = client.post("/upload", headers=JSON,
-                    data={"path": str(tmp_path), "files": [(io.BytesIO(b"A"), "a.txt")]})
+    r = client.post(
+        "/upload", headers=JSON, data={"path": str(tmp_path), "files": [(io.BytesIO(b"A"), "a.txt")]}
+    )
     assert r.status_code == 200
     with app.test_request_context():
         assert r.json == {"redirect": url_for("main.browse", path=str(tmp_path))}
@@ -207,7 +216,21 @@ def test_upload_json_error_also_returns_redirect(client, tmp_path):
 def test_upload_json_too_large(tmp_path, monkeypatch):
     monkeypatch.setenv("MAX_UPLOAD_MB", "1")
     client = create_app({"TESTING": True}).test_client()
-    r = client.post("/upload", headers=JSON,
-                    data={"path": str(tmp_path), "files": [(io.BytesIO(b"x" * (2 << 20)), "big.bin")]})
+    r = client.post(
+        "/upload",
+        headers=JSON,
+        data={"path": str(tmp_path), "files": [(io.BytesIO(b"x" * (2 << 20)), "big.bin")]},
+    )
     assert r.status_code == 413 and r.json["redirect"].startswith("/")
     assert b"exceeds the 1 MB limit" in client.get(r.json["redirect"], follow_redirects=True).data
+
+
+def test_filesize_filter(app):
+    filesize = app.jinja_env.filters["filesize"]
+    assert filesize(None) == "-"
+    assert filesize(0) == "0 B"
+    assert filesize(1023) == "1023 B"
+    assert filesize(1024) == "1.0 KB"
+    assert filesize(1536) == "1.5 KB"
+    assert filesize(5 * 1024**3) == "5.0 GB"
+    assert filesize(3 * 1024**5) == "3072.0 TB"

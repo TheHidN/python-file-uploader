@@ -4,14 +4,27 @@ from pathlib import Path
 import pytest
 
 from app.fs import (
-    FileResult, clean_filename, ensure_dir, list_dir, nearest_existing_dir, resolve_path, save_file,
+    FileResult,
+    clean_filename,
+    ensure_dir,
+    list_dir,
+    nearest_existing_dir,
+    resolve_path,
+    save_file,
 )
 
 
-@pytest.mark.parametrize("raw,expected", [
-    (None, "/"), ("", "/"), ("etc", "/etc"), ("/tmp/", "/tmp"),
-    ("//tmp//x", "/tmp/x"), ("/a/b/../c", "/a/c"),
-])
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        (None, "/"),
+        ("", "/"),
+        ("etc", "/etc"),
+        ("/tmp/", "/tmp"),
+        ("//tmp//x", "/tmp/x"),
+        ("/a/b/../c", "/a/c"),
+    ],
+)
 def test_resolve_path_cases(raw, expected):
     assert resolve_path(raw) == Path(expected)
 
@@ -32,7 +45,10 @@ def test_list_dir_order_and_fields(tmp_path):
     (tmp_path / "B.txt").write_text("")
     entries = list_dir(tmp_path)
     assert [(e.name, e.is_dir) for e in entries] == [
-        ("A", True), ("b", True), ("B.txt", False), ("c.txt", False),
+        ("A", True),
+        ("b", True),
+        ("B.txt", False),
+        ("c.txt", False),
     ]
     c = entries[3]
     assert c.size == 3 and c.mtime is not None
@@ -86,10 +102,16 @@ class FakeStorage:
             f.write(self.data)
 
 
-@pytest.mark.parametrize("raw,expected", [
-    ("a.txt", "a.txt"), ("my file.txt", "my file.txt"), ("../../etc/x", "x"),
-    ("a/b", "b"), (r"C:\Users\me\a b.txt", "a b.txt"),
-])
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("a.txt", "a.txt"),
+        ("my file.txt", "my file.txt"),
+        ("../../etc/x", "x"),
+        ("a/b", "b"),
+        (r"C:\Users\me\a b.txt", "a b.txt"),
+    ],
+)
 def test_clean_filename_cases(raw, expected):
     assert clean_filename(raw) == expected
 

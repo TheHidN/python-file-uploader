@@ -52,6 +52,9 @@ you visit can't make your browser upload files here.
 ## Tests
 
 ```bash
+.venv/bin/ruff check .
+.venv/bin/ruff format --check .
+.venv/bin/mypy
 .venv/bin/pytest
 ```
 

@@ -20,10 +20,12 @@ def _crumbs(path: Path) -> list[tuple[str, str]]:
 def _filesize(n: int | None) -> str:
     if n is None:
         return "-"
-    for unit in ("B", "KB", "MB", "GB", "TB"):
-        if n < 1024 or unit == "TB":
-            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
-        n /= 1024
+    size: float = n
+    for unit in ("B", "KB", "MB", "GB"):
+        if size < 1024:
+            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} TB"
 
 
 @bp.app_template_filter("mtime")
