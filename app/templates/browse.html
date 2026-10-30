@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>File Uploader — {{ path }}</title>
+<style>
+  :root { color-scheme: light dark; --muted: #888; --ok: #2e7d32; --err: #c62828; --line: #8884; }
+  body { font: 14px/1.45 system-ui, sans-serif; max-width: 960px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 18px; margin: 0 0 12px; }
+  a { color: inherit; }
+  .crumbs { font-family: ui-monospace, monospace; word-break: break-all; margin-bottom: 12px; }
+  .crumbs a { text-decoration: none; padding: 0 2px; }
+  .crumbs a:hover { text-decoration: underline; }
+  form.jump { display: flex; gap: 8px; margin-bottom: 16px; }
+  form.jump input { flex: 1; font-family: ui-monospace, monospace; padding: 6px; }
+  .flash { list-style: none; padding: 0; margin: 0 0 16px; }
+  .flash li { padding: 6px 10px; border-left: 4px solid; margin-bottom: 4px; background: #8881; }
+  .flash .ok { border-color: var(--ok); } .flash .error { border-color: var(--err); }
+  fieldset { border: 1px solid var(--line); border-radius: 6px; margin-bottom: 16px; }
+  fieldset label { margin-right: 16px; }
+  .upload-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  td.when { white-space: nowrap; color: var(--muted); }
+  .dir a { font-weight: 600; text-decoration: none; }
+  .table-wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<h1>File Uploader</h1>
+
+<nav class="crumbs">
+{% for label, p in crumbs %}<a href="{{ url_for('main.browse', path=p) }}">{{ label }}</a>{% if not loop.first and not loop.last %}/{% endif %}{% endfor %}
+</nav>
+
+<form class="jump" method="get" action="{{ url_for('main.browse') }}">
+  <input type="text" name="path" value="{{ path }}" aria-label="Go to path">
+  <button type="submit">Go</button>
+</form>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<ul class="flash">
+{% for category, message in messages %}<li class="{{ category }}">{{ message }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+{% endwith %}
+
+<fieldset>
+  <legend>Upload to <code>{{ path }}</code></legend>
+  <form method="post" action="upload" enctype="multipart/form-data">
+    <input type="hidden" name="path" value="{{ path }}">
+    <div class="upload-row">
+      <input type="file" name="files" multiple>
+      <label><input type="checkbox" name="create_dirs"> Create folder if missing</label>
+      <label><input type="checkbox" name="overwrite"> Overwrite existing</label>
+      <button type="submit">Upload</button>
+    </div>
+  </form>
+</fieldset>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Name</th><th class="num">Size</th><th>Modified</th></tr></thead>
+  <tbody>
+  {% if path.parent != path %}
+  <tr class="dir"><td><a href="{{ url_for('main.browse', path=path.parent|string) }}">..</a></td><td class="num">-</td><td></td></tr>
+  {% endif %}
+  {% for e in entries %}
+  {% if e.is_dir %}
+  <tr class="dir"><td><a href="{{ url_for('main.browse', path=(path / e.name)|string) }}">{{ e.name }}/</a></td><td class="num">-</td><td class="when">{{ e.mtime|mtime }}</td></tr>
+  {% else %}
+  <tr><td>{{ e.name }}</td><td class="num">{{ e.size|filesize }}</td><td class="when">{{ e.mtime|mtime }}</td></tr>
+  {% endif %}
+  {% else %}
+  <tr><td colspan="3" style="color: var(--muted)">Empty folder</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+</body>
+</html>
