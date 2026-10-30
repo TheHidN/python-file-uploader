@@ -1,0 +1,21 @@
+version: '3'
+# go-task is the standard runner for every project (regardless of ecosystem).
+# These tasks run the same commands CI runs.
+tasks:
+  default:
+    cmds:
+      - task: lint
+      - task: test
+  install:
+    desc: Create the virtualenv with the dev dependencies.
+    cmds:
+      - uv sync --all-extras --dev
+  lint:
+    desc: Run ruff and mypy.
+    cmds:
+      - uv run ruff check .
+      - uv run mypy
+  test:
+    desc: Run the tests.
+    cmds:
+      - uv run pytest
