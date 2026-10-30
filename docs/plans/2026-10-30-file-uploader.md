@@ -1,14 +1,12 @@
 # File Uploader Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** A Flask web app at `http://<server-ip>:8000` that browses this server's folders and uploads files into any of them. It runs as root and has no login.
 
 **Architecture:** `app/fs.py` holds every filesystem operation and imports nothing from Flask. `app/routes.py` is a thin blueprint that parses requests, calls `fs`, and renders a single Jinja template (`browse.html`). `create_app()` in `app/__init__.py` loads config from the environment. Gunicorn serves the app, started by hand with `sudo ./run.sh`.
 
 **Tech Stack:** Python 3.14, Flask 3.x, Gunicorn, pytest. Dependencies live in a project-local `.venv/`.
 
-**Spec:** `docs/superpowers/specs/2026-10-30-file-uploader-design.md`
+**Spec:** `docs/specs/2026-10-30-file-uploader-design.md`
 
 ## Global Constraints
 
