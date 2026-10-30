@@ -1,0 +1,65 @@
+# File Uploader
+
+A small Flask web app for browsing this server's folders and uploading files into any of them.
+It is the first piece of a larger project.
+
+> **Security warning:** there is no login, and the app runs as **root**. Anyone who can reach
+> port 8000 can write any file on this server, which amounts to full control of it.
+> Keep it on a trusted network, and see [Restricting access](#restricting-access-optional).
+
+## Setup
+
+```bash
+sudo apt install python3.14-venv
+python3 -m venv .venv
+.venv/bin/pip install -e '.[dev]'
+```
+
+## Running
+
+```bash
+sudo ./run.sh
+```
+
+Then open <http://<server-ip>:8000>. Stop the server with Ctrl+C. Gunicorn logs requests to the terminal.
+
+`sudo` resets the environment, so pass any settings on the command line:
+
+```bash
+sudo MAX_UPLOAD_MB=500 ./run.sh
+```
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SECRET_KEY` | random per start | Signs the session cookie that carries status messages. |
+| `MAX_UPLOAD_MB` | unset (no limit) | Rejects uploads larger than this many MB. |
+
+## Using it
+
+- Click through folders, or type a path in the box and press **Go**.
+- Choose one or more files and press **Upload**. They go into the folder you are viewing.
+- **Create folder if missing:** creates the target folder, including any missing parents.
+- **Overwrite existing:** replaces files that already exist. Otherwise they are skipped.
+- Each file is reported as `saved`, `skipped (exists)`, or `failed: <reason>`.
+
+## Tests
+
+```bash
+.venv/bin/pytest
+```
+
+## Restricting access (optional)
+
+To allow only your workstation to reach the app (replace `<your-ip>`):
+
+```bash
+sudo ufw allow from <your-ip> to any port 8000 proto tcp
+sudo ufw deny 8000/tcp
+sudo ufw enable   # only if ufw is not already active; make sure SSH is allowed first: sudo ufw allow OpenSSH
+```
+
+## Git workflow
+
+GitHub flow: `main` is always releasable. All work happens on short-lived feature branches
+(`feat/...`, `fix/...`, `docs/...`) that merge into `main` through pull requests. Commit messages
+follow [Conventional Commits](https://www.conventionalcommits.org/).
