@@ -26,6 +26,18 @@
   td.when { white-space: nowrap; color: var(--muted); }
   .dir a { font-weight: 600; text-decoration: none; }
   .table-wrap { overflow-x: auto; }
+  #dropzone { display: block; position: relative; border: 2px dashed var(--line); border-radius: 8px;
+    padding: 28px 16px; margin: 4px 0 12px; text-align: center; cursor: pointer; transition: .15s; }
+  #dropzone:hover, #dropzone:focus-within, body.dragging #dropzone { border-color: #3b82f6; background: #3b82f61a; }
+  body.dragging #dropzone { transform: scale(1.01); }
+  #dropzone .hint { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; }
+  /* Visually hidden but still focusable, so keyboard users can open the picker. */
+  #dropzone input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .js .nojs { display: none; }
+  .js #upload-form.busy #dropzone { opacity: .5; pointer-events: none; }
+  #progress { display: flex; gap: 12px; align-items: center; margin-top: 12px; }
+  #progress progress { flex: 1; height: 14px; }
+  #progress-text { font-variant-numeric: tabular-nums; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -51,13 +63,21 @@
 
 <fieldset>
   <legend>Upload to <code>{{ path }}</code></legend>
-  <form method="post" action="upload" enctype="multipart/form-data">
+  <form id="upload-form" method="post" action="upload" enctype="multipart/form-data">
     <input type="hidden" name="path" value="{{ path }}">
+    <label id="dropzone" for="files">
+      <input type="file" id="files" name="files" multiple>
+      <strong>Drop files here</strong> or click to choose
+      <span class="hint">They upload straight into this folder.</span>
+    </label>
     <div class="upload-row">
-      <input type="file" name="files" multiple>
       <label><input type="checkbox" name="create_dirs"> Create folder if missing</label>
       <label><input type="checkbox" name="overwrite"> Overwrite existing</label>
-      <button type="submit">Upload</button>
+      <button type="submit" class="nojs">Upload</button>
+    </div>
+    <div id="progress" hidden>
+      <progress max="100" value="0"></progress>
+      <span id="progress-text" aria-live="polite"></span>
     </div>
   </form>
 </fieldset>
@@ -81,5 +101,84 @@
   </tbody>
 </table>
 </div>
+
+<script>
+(() => {
+  document.documentElement.classList.add("js");
+  const form = document.getElementById("upload-form");
+  const input = document.getElementById("files");
+  const box = document.getElementById("progress");
+  const bar = box.querySelector("progress");
+  const text = document.getElementById("progress-text");
+  const mb = (n) => (n / 1048576).toFixed(1);
+  let depth = 0;
+
+  const say = (msg) => { box.hidden = false; text.textContent = msg; };
+
+  function upload(files) {
+    if (!files.length || form.classList.contains("busy")) return;
+    const data = new FormData(form);
+    data.delete("files");
+    for (const f of files) data.append("files", f, f.name);
+    form.classList.add("busy");
+    bar.value = 0;
+    say(`Uploading ${files.length} file${files.length > 1 ? "s" : ""}…`);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", form.action);
+    xhr.setRequestHeader("Accept", "application/json");
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+      bar.value = (e.loaded / e.total) * 100;
+      say(`${Math.floor(bar.value)}% · ${mb(e.loaded)} / ${mb(e.total)} MB`);
+    };
+    xhr.upload.onload = () => say("Saving…");
+    xhr.onload = () => {
+      let target = null;
+      try { target = JSON.parse(xhr.responseText).redirect; } catch {}
+      if (target) { location.href = target; return; }
+      fail(`Upload failed (HTTP ${xhr.status})`);
+    };
+    xhr.onerror = () => fail("Upload failed: the connection was lost (file too large?)");
+    xhr.send(data);
+  }
+
+  function fail(msg) {
+    form.classList.remove("busy");
+    bar.value = 0;
+    say(msg);
+  }
+
+  input.addEventListener("change", () => { upload([...input.files]); input.value = ""; });
+
+  // Accept a drop anywhere on the page; highlight the drop zone while dragging files.
+  const hasFiles = (e) => [...e.dataTransfer.types].includes("Files");
+  document.addEventListener("dragenter", (e) => {
+    if (!hasFiles(e)) return;
+    depth++;
+    document.body.classList.add("dragging");
+  });
+  document.addEventListener("dragleave", () => {
+    if (--depth <= 0) { depth = 0; document.body.classList.remove("dragging"); }
+  });
+  document.addEventListener("dragover", (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  });
+  document.addEventListener("drop", (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    depth = 0;
+    document.body.classList.remove("dragging");
+    const items = [...e.dataTransfer.items];
+    if (items.some((i) => i.webkitGetAsEntry?.()?.isDirectory)) {
+      say("Folders can't be uploaded yet. Drop the files inside them instead.");
+      return;
+    }
+    upload([...e.dataTransfer.files]);
+  });
+})();
+</script>
 </body>
 </html>

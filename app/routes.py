@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from app.fs import ensure_dir, list_dir, nearest_existing_dir, resolve_path, save_file
@@ -43,6 +43,16 @@ def _reject_cross_site_writes():
         abort(403)
 
 
+def _finish(url: str, status: int = 200):
+    """Send the browser to `url`: a redirect for forms, JSON for the drag-and-drop script.
+
+    The script navigates itself, so the flashed results survive until the page that shows them.
+    """
+    if request.accept_mimetypes.best_match(["text/html", "application/json"]) == "application/json":
+        return jsonify(redirect=url), status
+    return redirect(url)
+
+
 @bp.get("/")
 def index():
     return redirect(url_for("main.browse", path="/"))
@@ -68,9 +78,9 @@ def upload():
         form, uploads = request.form, request.files.getlist("files")
     except OSError as e:  # e.g. the temp dir filled up while receiving the body
         flash(f"Upload failed: {e.strerror or e}", "error")
-        return redirect(url_for("main.index"))
+        return _finish(url_for("main.index"))
     target = resolve_path(form.get("path"))
-    back = redirect(url_for("main.browse", path=str(target)))
+    back = _finish(url_for("main.browse", path=str(target)))
     files = [f for f in uploads if f.filename]
     if not files:
         flash("No files selected", "error")
@@ -101,4 +111,4 @@ def too_large(e):
         flash(f"Upload exceeds the {limit // (1024 * 1024)} MB limit", "error")
     else:
         flash("Upload rejected: too large or too many parts", "error")
-    return redirect(url_for("main.index"))
+    return _finish(url_for("main.index"), 413)

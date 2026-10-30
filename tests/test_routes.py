@@ -178,3 +178,36 @@ def test_upload_disk_full_while_parsing_is_flashed(client, tmp_path, monkeypatch
     r = client.post("/upload", data={"path": str(tmp_path)}, follow_redirects=True)
     assert r.status_code == 200
     assert b"Upload failed: No space left on device" in r.data
+
+
+JSON = {"Accept": "application/json"}
+
+
+def test_browse_has_drop_zone(client, tmp_path):
+    r = client.get("/browse", query_string={"path": str(tmp_path)})
+    assert b'id="dropzone"' in r.data and b'id="progress"' in r.data
+
+
+def test_upload_json_returns_redirect_and_keeps_flash(app, client, tmp_path):
+    r = client.post("/upload", headers=JSON,
+                    data={"path": str(tmp_path), "files": [(io.BytesIO(b"A"), "a.txt")]})
+    assert r.status_code == 200
+    with app.test_request_context():
+        assert r.json == {"redirect": url_for("main.browse", path=str(tmp_path))}
+    assert (tmp_path / "a.txt").read_bytes() == b"A"
+    assert b"a.txt: saved" in client.get(r.json["redirect"]).data
+
+
+def test_upload_json_error_also_returns_redirect(client, tmp_path):
+    r = client.post("/upload", headers=JSON, data={"path": str(tmp_path)})
+    assert r.status_code == 200 and "redirect" in r.json
+    assert b"No files selected" in client.get(r.json["redirect"]).data
+
+
+def test_upload_json_too_large(tmp_path, monkeypatch):
+    monkeypatch.setenv("MAX_UPLOAD_MB", "1")
+    client = create_app({"TESTING": True}).test_client()
+    r = client.post("/upload", headers=JSON,
+                    data={"path": str(tmp_path), "files": [(io.BytesIO(b"x" * (2 << 20)), "big.bin")]})
+    assert r.status_code == 413 and r.json["redirect"].startswith("/")
+    assert b"exceeds the 1 MB limit" in client.get(r.json["redirect"], follow_redirects=True).data
