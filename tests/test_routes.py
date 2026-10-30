@@ -139,3 +139,42 @@ def test_upload_too_large(tmp_path, monkeypatch):
     assert r.status_code == 200
     assert b"exceeds the 1 MB limit" in r.data
     assert not (tmp_path / "big.bin").exists()
+
+
+def test_upload_rejects_cross_origin(client, tmp_path):
+    r = client.post("/upload", data={"path": str(tmp_path), "files": [(io.BytesIO(b"A"), "a.txt")]},
+                    headers={"Origin": "http://evil.example"})
+    assert r.status_code == 403
+    assert not (tmp_path / "a.txt").exists()
+
+
+def test_upload_rejects_cross_site_fetch(client, tmp_path):
+    r = client.post("/upload", data={"path": str(tmp_path), "files": [(io.BytesIO(b"A"), "a.txt")]},
+                    headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+    assert not (tmp_path / "a.txt").exists()
+
+
+def test_upload_allows_same_origin(client, tmp_path):
+    client.post("/upload", data={"path": str(tmp_path), "files": [(io.BytesIO(b"A"), "a.txt")]},
+                headers={"Origin": "http://localhost", "Sec-Fetch-Site": "same-origin"})
+    assert (tmp_path / "a.txt").exists()
+
+
+def test_allowed_hosts_from_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("ALLOWED_HOSTS", "192.0.2.10, localhost")
+    client = create_app({"TESTING": True}).test_client()
+    assert client.get("/browse", headers={"Host": "192.0.2.10:8000"}).status_code == 200
+    assert client.get("/browse", headers={"Host": "rebind.evil.example"}).status_code == 400
+
+
+def test_upload_disk_full_while_parsing_is_flashed(client, tmp_path, monkeypatch):
+    from flask import Request
+
+    def full(self):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(Request, "_load_form_data", full)
+    r = client.post("/upload", data={"path": str(tmp_path)}, follow_redirects=True)
+    assert r.status_code == 200
+    assert b"Upload failed: No space left on device" in r.data

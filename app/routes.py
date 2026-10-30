@@ -1,7 +1,8 @@
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
-from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from app.fs import ensure_dir, list_dir, nearest_existing_dir, resolve_path, save_file
@@ -30,6 +31,18 @@ def _mtime(ts: float | None) -> str:
     return "-" if ts is None else datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
 
 
+@bp.before_app_request
+def _reject_cross_site_writes():
+    """Stop other web pages from making the operator's browser POST here (CSRF)."""
+    if request.method != "POST":
+        return
+    if request.headers.get("Sec-Fetch-Site") in ("cross-site", "same-site"):
+        abort(403)
+    origin = request.headers.get("Origin")
+    if origin and urlsplit(origin).netloc != request.host:
+        abort(403)
+
+
 @bp.get("/")
 def index():
     return redirect(url_for("main.browse", path="/"))
@@ -51,14 +64,19 @@ def browse():
 
 @bp.post("/upload")
 def upload():
-    target = resolve_path(request.form.get("path"))
+    try:
+        form, uploads = request.form, request.files.getlist("files")
+    except OSError as e:  # e.g. the temp dir filled up while receiving the body
+        flash(f"Upload failed: {e.strerror or e}", "error")
+        return redirect(url_for("main.index"))
+    target = resolve_path(form.get("path"))
     back = redirect(url_for("main.browse", path=str(target)))
-    files = [f for f in request.files.getlist("files") if f.filename]
+    files = [f for f in uploads if f.filename]
     if not files:
         flash("No files selected", "error")
         return back
     try:
-        ensure_dir(target, create="create_dirs" in request.form)
+        ensure_dir(target, create="create_dirs" in form)
     except FileNotFoundError:
         flash(f"Directory does not exist: {target} (tick 'Create folder' to create it)", "error")
         return back
@@ -68,7 +86,7 @@ def upload():
     except OSError as e:
         flash(f"Cannot use {target}: {e.strerror or e}", "error")
         return back
-    overwrite = "overwrite" in request.form
+    overwrite = "overwrite" in form
     for f in files:
         result = save_file(f, target, overwrite)
         flash(f"{result.name}: {result.status}", "ok" if result.status == "saved" else "error")
