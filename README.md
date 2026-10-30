@@ -21,7 +21,7 @@ python3 -m venv .venv
 sudo ./run.sh
 ```
 
-Then open <http://<server-ip>:8000>. Stop the server with Ctrl+C. Gunicorn logs requests to the terminal.
+Then open `http://<server-ip>:8000` in a browser, using this server's LAN address (`hostname -I` shows it). Stop the server with Ctrl+C. Gunicorn logs requests to the terminal.
 
 `sudo` resets the environment, so pass any settings on the command line:
 
@@ -31,6 +31,8 @@ sudo MAX_UPLOAD_MB=500 ./run.sh
 
 | Variable | Default | Purpose |
 |---|---|---|
+| `BIND` | `0.0.0.0` (all interfaces) | Address to listen on, e.g. one LAN address or `127.0.0.1`. |
+| `PORT` | `8000` | Port to listen on. |
 | `SECRET_KEY` | random per start | Signs the session cookie that carries status messages. |
 | `MAX_UPLOAD_MB` | unset (no limit) | Rejects uploads larger than this many MB. |
 | `ALLOWED_HOSTS` | this server's IPs, `localhost`, `127.0.0.1` | Comma-separated host names the app answers to. Add a DNS name here if you use one. |
