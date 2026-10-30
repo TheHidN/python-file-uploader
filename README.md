@@ -33,6 +33,11 @@ sudo MAX_UPLOAD_MB=500 ./run.sh
 |---|---|---|
 | `SECRET_KEY` | random per start | Signs the session cookie that carries status messages. |
 | `MAX_UPLOAD_MB` | unset (no limit) | Rejects uploads larger than this many MB. |
+| `ALLOWED_HOSTS` | this server's IPs, `localhost`, `127.0.0.1` | Comma-separated host names the app answers to. Add a DNS name here if you use one. |
+
+Uploads are spooled to `/var/tmp` (on disk) while they arrive, then moved into place, so a failed
+upload never damages an existing file. Uploads from other websites are refused (403), so a page
+you visit can't make your browser upload files here.
 
 ## Using it
 
