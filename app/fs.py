@@ -2,6 +2,7 @@
 
 import os
 import re
+import secrets
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -90,8 +91,13 @@ def save_file(storage, target_dir: Path, overwrite: bool) -> FileResult:
         return FileResult(name, "failed: is a directory")
     if dst.exists() and not overwrite:
         return FileResult(name, "skipped (exists)")
+    # Write beside the target, then swap it in: a failed upload never clobbers or truncates `dst`.
+    tmp = target_dir / f".{name}.{secrets.token_hex(4)}.part"
     try:
-        storage.save(str(dst))
+        os.close(os.open(tmp, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o666))  # honours umask
+        storage.save(str(tmp))
+        os.replace(tmp, dst)
     except OSError as e:
+        tmp.unlink(missing_ok=True)
         return FileResult(name, f"failed: {e.strerror or e}")
     return FileResult(name, "saved")

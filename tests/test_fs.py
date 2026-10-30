@@ -168,3 +168,26 @@ def test_save_file_onto_directory_fails(tmp_path):
 def test_save_file_os_error_reported(tmp_path):
     r = save_file(FakeStorage("a.txt", b"x"), tmp_path / "missing", overwrite=False)
     assert r.name == "a.txt" and r.status.startswith("failed: ")
+
+
+class FailingStorage(FakeStorage):
+    """Writes part of the data, then fails like a full disk."""
+
+    def save(self, dst):
+        with open(dst, "wb") as f:
+            f.write(self.data[:1])
+        raise OSError(28, "No space left on device")
+
+
+def test_save_file_failed_overwrite_keeps_original(tmp_path):
+    (tmp_path / "a.txt").write_bytes(b"original")
+    r = save_file(FailingStorage("a.txt", b"new data"), tmp_path, overwrite=True)
+    assert r == FileResult("a.txt", "failed: No space left on device")
+    assert (tmp_path / "a.txt").read_bytes() == b"original"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["a.txt"]
+
+
+def test_save_file_failed_new_file_leaves_nothing(tmp_path):
+    r = save_file(FailingStorage("a.txt", b"new data"), tmp_path, overwrite=False)
+    assert r.status.startswith("failed: ")
+    assert list(tmp_path.iterdir()) == []
