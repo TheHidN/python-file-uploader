@@ -1,6 +1,7 @@
 """Filesystem operations for the uploader. No Flask imports: keep this testable on its own."""
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -48,3 +49,49 @@ def list_dir(path: Path) -> list[Entry]:
             entries.append(Entry(de.name, is_dir, None if is_dir else st.st_size, st.st_mtime))
     entries.sort(key=lambda e: (not e.is_dir, e.name.casefold()))
     return entries
+
+
+@dataclass(frozen=True)
+class FileResult:
+    name: str
+    status: str  # "saved", "skipped (exists)", or "failed: <reason>"
+
+
+def clean_filename(raw: str | None) -> str:
+    """Keep only the final path component; spaces etc. are kept as given."""
+    name = re.split(r"[/\\]", raw or "")[-1]
+    if name in ("", ".", "..") or "\x00" in name:
+        raise ValueError("invalid filename")
+    return name
+
+
+def ensure_dir(path: Path, create: bool) -> None:
+    """Make sure `path` is a directory, creating it (and parents) if allowed."""
+    if path.is_dir():
+        return
+    if path.exists():
+        raise NotADirectoryError(f"Not a directory: {path}")
+    if not create:
+        raise FileNotFoundError(f"Directory does not exist: {path}")
+    path.mkdir(parents=True, exist_ok=True)
+
+
+def save_file(storage, target_dir: Path, overwrite: bool) -> FileResult:
+    """Save one upload into `target_dir`. Never raises; failures are reported in the result.
+
+    `storage` is anything with `.filename` and `.save(dst)`, e.g. werkzeug's FileStorage.
+    """
+    try:
+        name = clean_filename(storage.filename)
+    except ValueError as e:
+        return FileResult(storage.filename or "", f"failed: {e}")
+    dst = target_dir / name
+    if dst.is_dir():
+        return FileResult(name, "failed: is a directory")
+    if dst.exists() and not overwrite:
+        return FileResult(name, "skipped (exists)")
+    try:
+        storage.save(str(dst))
+    except OSError as e:
+        return FileResult(name, f"failed: {e.strerror or e}")
+    return FileResult(name, "saved")
