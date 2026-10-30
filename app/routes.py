@@ -1,9 +1,10 @@
 from datetime import datetime
 from pathlib import Path
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
+from werkzeug.exceptions import RequestEntityTooLarge
 
-from app.fs import list_dir, nearest_existing_dir, resolve_path
+from app.fs import ensure_dir, list_dir, nearest_existing_dir, resolve_path, save_file
 
 bp = Blueprint("main", __name__)
 
@@ -46,3 +47,40 @@ def browse():
         flash(f"Cannot read {path}: {e.strerror or e}", "error")
         entries = []
     return render_template("browse.html", path=path, crumbs=_crumbs(path), entries=entries)
+
+
+@bp.post("/upload")
+def upload():
+    target = resolve_path(request.form.get("path"))
+    back = redirect(url_for("main.browse", path=str(target)))
+    files = [f for f in request.files.getlist("files") if f.filename]
+    if not files:
+        flash("No files selected", "error")
+        return back
+    try:
+        ensure_dir(target, create="create_dirs" in request.form)
+    except FileNotFoundError:
+        flash(f"Directory does not exist: {target} (tick 'Create folder' to create it)", "error")
+        return back
+    except NotADirectoryError:
+        flash(f"Not a directory: {target}", "error")
+        return back
+    except OSError as e:
+        flash(f"Cannot use {target}: {e.strerror or e}", "error")
+        return back
+    overwrite = "overwrite" in request.form
+    for f in files:
+        result = save_file(f, target, overwrite)
+        flash(f"{result.name}: {result.status}", "ok" if result.status == "saved" else "error")
+    return back
+
+
+@bp.app_errorhandler(RequestEntityTooLarge)
+def too_large(e):
+    # The form can't be read past the limit, so the target path is unknown.
+    limit = current_app.config.get("MAX_CONTENT_LENGTH")
+    if limit:
+        flash(f"Upload exceeds the {limit // (1024 * 1024)} MB limit", "error")
+    else:
+        flash("Upload rejected: too large or too many parts", "error")
+    return redirect(url_for("main.index"))
