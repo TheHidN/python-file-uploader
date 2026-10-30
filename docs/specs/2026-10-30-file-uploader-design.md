@@ -42,7 +42,7 @@ file-uploader/
 ├── tests/
 │   ├── test_fs.py
 │   └── test_routes.py
-├── docs/superpowers/specs/
+├── docs/specs/
 ├── run.sh               # starts gunicorn on 0.0.0.0:8000
 ├── pyproject.toml       # deps: flask, gunicorn; dev: pytest
 ├── .gitignore
